@@ -5,9 +5,9 @@ import re
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, 'data', '.env'))
 
-# настройки бд
 DB_CONFIG = {
     'host':     os.getenv('DB_HOST'),
     'user':     os.getenv('DB_USER'),
@@ -15,7 +15,6 @@ DB_CONFIG = {
     'database': os.getenv('DB_NAME'),
 }
 
-# валидация
 def validate(data, languages):
     errors = []
 
@@ -80,13 +79,11 @@ def validate(data, languages):
     return errors
 
 
-# сохранение в бд (один ко многим)
 def save_to_db(data, languages):
     conn = mysql.connector.connect(**DB_CONFIG)
     cursor = conn.cursor()
 
     try:
-        # сохраняем основные данные пользователя
         cursor.execute("""
             INSERT INTO users (fullname, phone, email, birthdate, gender, bio, contract)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -100,10 +97,8 @@ def save_to_db(data, languages):
             1 if data.get('contract') else 0
         ))
 
-        # получаем id только что созданной записи
         user_id = cursor.lastrowid
 
-        # сохраняем каждый язык отдельной строкой в user_languages
         for lang in languages:
             cursor.execute("""
                 INSERT INTO user_languages (user_id, language)
@@ -194,7 +189,6 @@ class Handler(BaseHTTPRequestHandler):
         data = {k: v[0] for k, v in fields.items()}
         languages = fields.get('languages', [])
 
-        # валидация
         errors = validate(data, languages)
 
         if errors:
