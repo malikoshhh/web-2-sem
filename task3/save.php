@@ -1,7 +1,7 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 
-$pdo = new PDO('mysql:host=localhost;dbname=u77607', 'u77607', '4462664', [
+$pdo = new PDO('mysql:host=localhost;dbname=u77607', [
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
 ]);
 
