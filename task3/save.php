@@ -78,15 +78,21 @@ if ($errors) {
     header('Location: form.php');
     exit;
 } else {
+    $login = 'user_' . bin2hex(random_bytes(4));
+    $password = bin2hex(random_bytes(6));
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+
     $stmt = $pdo->prepare("
-        INSERT INTO users (fullname, phone, email, birthdate, gender, bio, contract)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (fullname, phone, email, birthdate, gender, bio, contract, login, password_hash)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $stmt->execute([
         $fullname, $phone, $email,
         $birthdate ?: null,
         $gender, $bio,
-        $contract ? 1 : 0
+        $contract ? 1 : 0,
+        $login,
+        $passwordHash
     ]);
     $userId = $pdo->lastInsertId();
 
@@ -110,14 +116,31 @@ if ($errors) {
     <style>
       body { font-family: sans-serif; background: #f8f8f6; display: flex;
              align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-      .box { text-align: center; }
-      h2 { font-size: 28px; margin-bottom: 16px; }
-      a { font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;
-          color: #0a0a0a; text-decoration: none; border-bottom: 1px solid #0a0a0a; }
+      .box { text-align: center; max-width: 500px; background: white;
+             border: 1px solid #d0d0ca; padding: 40px 48px; }
+      h2 { font-size: 28px; margin-bottom: 24px; color: #0a0a0a; }
+      .credentials { background: #f0f0eb; padding: 20px; margin: 24px 0;
+                      border-left: 3px solid #0a0a0a; text-align: left; }
+      .credentials h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px;
+                        letter-spacing: 0.05em; text-transform: uppercase; }
+      .credentials p { margin: 8px 0; font-size: 14px; line-height: 1.8; }
+      .credentials strong { font-weight: 600; color: #0a0a0a; }
+      .credentials code { background: white; padding: 4px 8px; border: 1px solid #d0d0ca;
+                          font-family: monospace; font-size: 13px; }
+      .note { font-size: 12px; color: #b0b0aa; line-height: 1.6; margin-top: 20px; }
+      a { display: inline-block; margin-top: 24px; font-size: 12px; letter-spacing: 0.1em;
+          text-transform: uppercase; color: #0a0a0a; text-decoration: none;
+          border-bottom: 1px solid #0a0a0a; padding-bottom: 2px; }
     </style>
     </head><body><div class="box">
-      <h2>&#10003; Данные сохранены!</h2>
-      <a href="/web-4-sem/task3/form.php">&#8592; Назад к форме</a>
+      <h2>✓ Регистрация завершена!</h2>
+      <div class="credentials">
+        <h3>Ваши учетные данные</h3>
+        <p><strong>Логин:</strong> <code>$login</code></p>
+        <p><strong>Пароль:</strong> <code>$password</code></p>
+      </div>
+      <p class="note">Сохраните эти данные. Они потребуются для входа и редактирования ваших данных.</p>
+      <a href="/web-4-sem/task3/login.php">→ Войти в систему</a>
     </div></body></html>
     HTML;
 }
