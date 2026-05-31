@@ -1,9 +1,22 @@
 <?php
 header('Content-Type: text/html; charset=utf-8');
 
-$pdo = new PDO('mysql:host=localhost;dbname=u77607', [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-]);
+$envPath = __DIR__ . '/../.env';
+if (file_exists($envPath)) {
+    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        list($key, $value) = explode('=', $line, 2);
+        $_ENV[trim($key)] = trim($value);
+    }
+}
+
+$pdo = new PDO(
+    'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';dbname=' . ($_ENV['DB_NAME'] ?? ''),
+    $_ENV['DB_USER'] ?? '',
+    $_ENV['DB_PASS'] ?? '',
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+);
 
 $errors = [];
 
