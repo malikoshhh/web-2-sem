@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/security.php';
+
 session_start();
 
 if (isset($_SESSION['user_id'])) {
@@ -9,22 +11,12 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $envPath = __DIR__ . '/../.env';
-    if (file_exists($envPath)) {
-        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            if (strpos(trim($line), '#') === 0) continue;
-            list($key, $value) = explode('=', $line, 2);
-            $_ENV[trim($key)] = trim($value);
-        }
+    // CSRF защита
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed');
     }
 
-    $pdo = new PDO(
-        'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';dbname=' . ($_ENV['DB_NAME'] ?? ''),
-        $_ENV['DB_USER'] ?? '',
-        $_ENV['DB_PASS'] ?? '',
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    $pdo = getDbConnection();
 
     $login = trim($_POST['login'] ?? '');
     $password = trim($_POST['password'] ?? '');
@@ -34,8 +26,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$login]);
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($user && password_verify($password, $user['password_hash'])) {
+        // Защита от timing attack: всегда выполняем password_verify
+        $dummyHash = '$2y$10$abcdefghijklmnopqrstuvwxyz1234567890ABCDEFGHIJKLMNOP';
+        $hashToVerify = $user ? $user['password_hash'] : $dummyHash;
+        $isValid = password_verify($password, $hashToVerify);
+
+        if ($user && $isValid) {
             $_SESSION['user_id'] = $user['id'];
+            // Защита от Session Fixation
+            session_regenerate_id(true);
             header('Location: edit.php');
             exit;
         } else {
@@ -45,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Заполните все поля';
     }
 }
+
+$csrfToken = generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -214,6 +215,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php endif; ?>
 
   <form method="POST">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"/>
+
     <div class="field">
       <label for="login">Логин</label>
       <div class="input-wrap">

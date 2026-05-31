@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/security.php';
+
 session_start();
 
 if (!isset($_SESSION['user_id'])) {
@@ -6,22 +8,7 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$envPath = __DIR__ . '/../.env';
-if (file_exists($envPath)) {
-    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        list($key, $value) = explode('=', $line, 2);
-        $_ENV[trim($key)] = trim($value);
-    }
-}
-
-$pdo = new PDO(
-    'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';dbname=' . ($_ENV['DB_NAME'] ?? ''),
-    $_ENV['DB_USER'] ?? '',
-    $_ENV['DB_PASS'] ?? '',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$pdo = getDbConnection();
 
 $userId = $_SESSION['user_id'];
 
@@ -43,6 +30,11 @@ $errors = [];
 $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // CSRF защита
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed');
+    }
+
     $fullname = trim($_POST['fullname'] ?? '');
     if (!$fullname) $errors[] = 'ФИО обязательно для заполнения';
     elseif (strlen($fullname) < 5) $errors[] = 'ФИО слишком короткое (минимум 5 символов)';
@@ -75,9 +67,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $gender = trim($_POST['gender'] ?? '');
     if (!$gender) $errors[] = 'Укажите пол';
-    elseif (!in_array($gender, ['male', 'female'])) $errors[] = 'Пол указан некорректно';
+    elseif (!in_array($gender, ['male', 'female'], true)) $errors[] = 'Пол указан некорректно';
 
-    $languages = isset($_POST['languages']) ? (array)$_POST['languages'] : [];
+    // Whitelist валидация языков (защита от SQL Injection)
+    $languages = validateLanguages($_POST['languages'] ?? []);
     if (empty($languages)) $errors[] = 'Выберите хотя бы один язык программирования';
 
     $bio = trim($_POST['bio'] ?? '');
@@ -119,6 +112,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = true;
     }
 }
+
+$csrfToken = generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -540,6 +535,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php endif; ?>
 
   <form method="POST">
+
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"/>
 
     <div class="field-group">
       <span class="field-num">01</span>

@@ -1,45 +1,44 @@
 <?php
-// HTTP-авторизация
+require_once __DIR__ . '/security.php';
+
+// Безопасная HTTP-авторизация с хешированным паролем
+$adminLogin = 'admin';
+$adminPasswordHash = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi'; // password: 123
+
 if (empty($_SERVER['PHP_AUTH_USER']) ||
     empty($_SERVER['PHP_AUTH_PW']) ||
-    $_SERVER['PHP_AUTH_USER'] != 'admin' ||
-    md5($_SERVER['PHP_AUTH_PW']) != md5('123')) {
+    $_SERVER['PHP_AUTH_USER'] !== $adminLogin ||
+    !password_verify($_SERVER['PHP_AUTH_PW'], $adminPasswordHash)) {
   header('HTTP/1.1 401 Unauthorized');
   header('WWW-Authenticate: Basic realm="Admin Panel"');
   print('<h1>401 Требуется авторизация</h1>');
   exit();
 }
 
-// Подключение к БД
-$envPath = __DIR__ . '/../.env';
-if (file_exists($envPath)) {
-    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        list($key, $value) = explode('=', $line, 2);
-        $_ENV[trim($key)] = trim($value);
-    }
-}
+session_start();
 
-$pdo = new PDO(
-    'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';dbname=' . ($_ENV['DB_NAME'] ?? ''),
-    $_ENV['DB_USER'] ?? '',
-    $_ENV['DB_PASS'] ?? '',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$pdo = getDbConnection();
 
 $message = '';
 
-// Обработка удаления
-if (isset($_GET['delete'])) {
-    $id = (int)$_GET['delete'];
+// Обработка удаления через POST с CSRF защитой
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'delete') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed');
+    }
+
+    $id = (int)$_POST['user_id'];
     $pdo->prepare("DELETE FROM user_languages WHERE user_id = ?")->execute([$id]);
     $pdo->prepare("DELETE FROM users WHERE id = ?")->execute([$id]);
     $message = 'Пользователь удален';
 }
 
-// Обработка редактирования
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
+// Обработка редактирования через POST с CSRF защитой
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed');
+    }
+
     $id = (int)$_POST['edit_id'];
     $fullname = trim($_POST['fullname'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
@@ -47,7 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_id'])) {
     $birthdate = trim($_POST['birthdate'] ?? '');
     $gender = trim($_POST['gender'] ?? '');
     $bio = trim($_POST['bio'] ?? '');
-    $languages = isset($_POST['languages']) ? (array)$_POST['languages'] : [];
+
+    // Whitelist валидация языков
+    $languages = validateLanguages($_POST['languages'] ?? []);
 
     $stmt = $pdo->prepare("
         UPDATE users
@@ -94,6 +95,8 @@ if (isset($_GET['edit'])) {
         }
     }
 }
+
+$csrfToken = generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -374,6 +377,8 @@ if (isset($_GET['edit'])) {
   <div class="edit-form">
     <h2>Редактирование пользователя #<?= $editUser['id'] ?></h2>
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"/>
+      <input type="hidden" name="action" value="edit"/>
       <input type="hidden" name="edit_id" value="<?= $editUser['id'] ?>"/>
 
       <div class="form-grid">
@@ -408,18 +413,9 @@ if (isset($_GET['edit'])) {
         <div class="form-field">
           <label>Языки программирования</label>
           <select name="languages[]" multiple required>
-            <option <?= in_array('Pascal', $editUser['languages']) ? 'selected' : '' ?>>Pascal</option>
-            <option <?= in_array('C', $editUser['languages']) ? 'selected' : '' ?>>C</option>
-            <option <?= in_array('C++', $editUser['languages']) ? 'selected' : '' ?>>C++</option>
-            <option <?= in_array('JavaScript', $editUser['languages']) ? 'selected' : '' ?>>JavaScript</option>
-            <option <?= in_array('PHP', $editUser['languages']) ? 'selected' : '' ?>>PHP</option>
-            <option <?= in_array('Python', $editUser['languages']) ? 'selected' : '' ?>>Python</option>
-            <option <?= in_array('Java', $editUser['languages']) ? 'selected' : '' ?>>Java</option>
-            <option <?= in_array('Haskell', $editUser['languages']) ? 'selected' : '' ?>>Haskell</option>
-            <option <?= in_array('Clojure', $editUser['languages']) ? 'selected' : '' ?>>Clojure</option>
-            <option <?= in_array('Prolog', $editUser['languages']) ? 'selected' : '' ?>>Prolog</option>
-            <option <?= in_array('Scala', $editUser['languages']) ? 'selected' : '' ?>>Scala</option>
-            <option <?= in_array('Go', $editUser['languages']) ? 'selected' : '' ?>>Go</option>
+            <?php foreach (getAllowedLanguages() as $lang): ?>
+            <option <?= in_array($lang, $editUser['languages']) ? 'selected' : '' ?>><?= htmlspecialchars($lang) ?></option>
+            <?php endforeach; ?>
           </select>
         </div>
 
@@ -469,7 +465,12 @@ if (isset($_GET['edit'])) {
         <td>
           <div class="actions">
             <a href="?edit=<?= $user['id'] ?>" class="btn">Редактировать</a>
-            <a href="?delete=<?= $user['id'] ?>" class="btn btn-delete" onclick="return confirm('Удалить пользователя?')">Удалить</a>
+            <form method="POST" style="display: inline;" onsubmit="return confirm('Удалить пользователя?')">
+              <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"/>
+              <input type="hidden" name="action" value="delete"/>
+              <input type="hidden" name="user_id" value="<?= $user['id'] ?>"/>
+              <button type="submit" class="btn btn-delete">Удалить</button>
+            </form>
           </div>
         </td>
       </tr>

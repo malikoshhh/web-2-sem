@@ -1,22 +1,17 @@
 <?php
+require_once __DIR__ . '/security.php';
+
+session_start();
 header('Content-Type: text/html; charset=utf-8');
 
-$envPath = __DIR__ . '/../.env';
-if (file_exists($envPath)) {
-    $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        list($key, $value) = explode('=', $line, 2);
-        $_ENV[trim($key)] = trim($value);
+// CSRF защита
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        die('CSRF validation failed');
     }
 }
 
-$pdo = new PDO(
-    'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';dbname=' . ($_ENV['DB_NAME'] ?? ''),
-    $_ENV['DB_USER'] ?? '',
-    $_ENV['DB_PASS'] ?? '',
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
+$pdo = getDbConnection();
 
 $errors = [];
 
@@ -52,9 +47,10 @@ if (!$birthdate) {
 
 $gender = trim($_POST['gender'] ?? '');
 if (!$gender) $errors[] = 'Укажите пол';
-elseif (!in_array($gender, ['male', 'female'])) $errors[] = 'Пол указан некорректно';
+elseif (!in_array($gender, ['male', 'female'], true)) $errors[] = 'Пол указан некорректно';
 
-$languages = isset($_POST['languages']) ? (array)$_POST['languages'] : [];
+// Whitelist валидация языков (защита от SQL Injection)
+$languages = validateLanguages($_POST['languages'] ?? []);
 if (empty($languages)) $errors[] = 'Выберите хотя бы один язык программирования';
 
 $bio = trim($_POST['bio'] ?? '');
@@ -65,15 +61,16 @@ $contract = $_POST['contract'] ?? '';
 if (!$contract) $errors[] = 'Необходимо подтвердить ознакомление с контрактом';
 
 if ($errors) {
-    setcookie('form_errors', json_encode($errors), 0, '/');
-    setcookie('form_fullname', $fullname, 0, '/');
-    setcookie('form_phone', $phone, 0, '/');
-    setcookie('form_email', $email, 0, '/');
-    setcookie('form_birthdate', $birthdate, 0, '/');
-    setcookie('form_gender', $gender, 0, '/');
-    setcookie('form_languages', json_encode($languages), 0, '/');
-    setcookie('form_bio', $bio, 0, '/');
-    setcookie('form_contract', $contract, 0, '/');
+    // Безопасные cookies с HttpOnly и Secure флагами
+    setSecureCookie('form_errors', json_encode($errors, JSON_UNESCAPED_UNICODE), 0);
+    setSecureCookie('form_fullname', $fullname, 0);
+    setSecureCookie('form_phone', $phone, 0);
+    setSecureCookie('form_email', $email, 0);
+    setSecureCookie('form_birthdate', $birthdate, 0);
+    setSecureCookie('form_gender', $gender, 0);
+    setSecureCookie('form_languages', json_encode($languages, JSON_UNESCAPED_UNICODE), 0);
+    setSecureCookie('form_bio', $bio, 0);
+    setSecureCookie('form_contract', $contract, 0);
 
     header('Location: form.php');
     exit;
@@ -82,6 +79,7 @@ if ($errors) {
     $password = bin2hex(random_bytes(6));
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
 
+    // Prepared statements защищают от SQL Injection
     $stmt = $pdo->prepare("
         INSERT INTO users (fullname, phone, email, birthdate, gender, bio, contract, login, password_hash)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -96,20 +94,22 @@ if ($errors) {
     ]);
     $userId = $pdo->lastInsertId();
 
+    // Whitelist валидация защищает от SQL Injection
     $langStmt = $pdo->prepare("INSERT INTO user_languages (user_id, language) VALUES (?, ?)");
     foreach ($languages as $lang) {
         $langStmt->execute([$userId, $lang]);
     }
 
+    // Сохранение в безопасные cookies на год
     $expires = time() + (365 * 24 * 60 * 60);
-    setcookie('form_fullname', $fullname, $expires, '/');
-    setcookie('form_phone', $phone, $expires, '/');
-    setcookie('form_email', $email, $expires, '/');
-    setcookie('form_birthdate', $birthdate, $expires, '/');
-    setcookie('form_gender', $gender, $expires, '/');
-    setcookie('form_languages', json_encode($languages), $expires, '/');
-    setcookie('form_bio', $bio, $expires, '/');
-    setcookie('form_contract', '1', $expires, '/');
+    setSecureCookie('form_fullname', $fullname, $expires);
+    setSecureCookie('form_phone', $phone, $expires);
+    setSecureCookie('form_email', $email, $expires);
+    setSecureCookie('form_birthdate', $birthdate, $expires);
+    setSecureCookie('form_gender', $gender, $expires);
+    setSecureCookie('form_languages', json_encode($languages, JSON_UNESCAPED_UNICODE), $expires);
+    setSecureCookie('form_bio', $bio, $expires);
+    setSecureCookie('form_contract', '1', $expires);
 
     echo <<<HTML
     <html><head><meta charset="utf-8"/><title>Успех</title>

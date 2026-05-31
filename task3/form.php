@@ -1,7 +1,15 @@
 <?php
+require_once __DIR__ . '/security.php';
+
+session_start();
+
 $errors = [];
 if (isset($_COOKIE['form_errors'])) {
-    $errors = json_decode($_COOKIE['form_errors'], true) ?: [];
+    $decoded = json_decode($_COOKIE['form_errors'], true);
+    // Валидация структуры данных из cookie
+    if (is_array($decoded)) {
+        $errors = array_filter($decoded, 'is_string');
+    }
     setcookie('form_errors', '', time() - 3600, '/');
 }
 
@@ -10,7 +18,16 @@ $phone = $_COOKIE['form_phone'] ?? '';
 $email = $_COOKIE['form_email'] ?? '';
 $birthdate = $_COOKIE['form_birthdate'] ?? '';
 $gender = $_COOKIE['form_gender'] ?? '';
-$languages = isset($_COOKIE['form_languages']) ? json_decode($_COOKIE['form_languages'], true) : [];
+
+// Валидация языков из cookie
+$languages = [];
+if (isset($_COOKIE['form_languages'])) {
+    $decoded = json_decode($_COOKIE['form_languages'], true);
+    if (is_array($decoded)) {
+        $languages = validateLanguages($decoded);
+    }
+}
+
 $bio = $_COOKIE['form_bio'] ?? '';
 $contract = $_COOKIE['form_contract'] ?? '';
 
@@ -24,6 +41,9 @@ if ($errors) {
     setcookie('form_bio', '', time() - 3600, '/');
     setcookie('form_contract', '', time() - 3600, '/');
 }
+
+// Генерация CSRF токена
+$csrfToken = generateCsrfToken();
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -443,6 +463,8 @@ if ($errors) {
   <?php endif; ?>
 
   <form action="/web-4-sem/task3/save.php" method="POST">
+
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"/>
 
     <div class="field-group">
       <span class="field-num">01</span>
