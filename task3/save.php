@@ -65,26 +65,18 @@ $contract = $_POST['contract'] ?? '';
 if (!$contract) $errors[] = 'Необходимо подтвердить ознакомление с контрактом';
 
 if ($errors) {
-    $items = implode('', array_map(fn($e) => "<li>$e</li>", $errors));
-    echo <<<HTML
-    <html><head><meta charset="utf-8"/><title>Ошибка</title>
-    <style>
-      body { font-family: sans-serif; background: #f8f8f6; display: flex;
-             align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-      .box { background: white; border: 1px solid #d0d0ca; padding: 40px 48px;
-             max-width: 480px; width: 100%; }
-      h2 { font-size: 22px; margin-bottom: 20px; color: #0a0a0a; }
-      ul { padding-left: 20px; color: #c0392b; line-height: 2; font-size: 14px; }
-      a { display: inline-block; margin-top: 28px; font-size: 12px; letter-spacing: 0.1em;
-          text-transform: uppercase; color: #0a0a0a; text-decoration: none;
-          border-bottom: 1px solid #0a0a0a; padding-bottom: 2px; }
-    </style>
-    </head><body><div class="box">
-      <h2>Пожалуйста, исправьте ошибки</h2>
-      <ul>$items</ul>
-      <a href="/web-4-sem/task3/form.html">&#8592; Вернуться к форме</a>
-    </div></body></html>
-    HTML;
+    setcookie('form_errors', json_encode($errors), 0, '/');
+    setcookie('form_fullname', $fullname, 0, '/');
+    setcookie('form_phone', $phone, 0, '/');
+    setcookie('form_email', $email, 0, '/');
+    setcookie('form_birthdate', $birthdate, 0, '/');
+    setcookie('form_gender', $gender, 0, '/');
+    setcookie('form_languages', json_encode($languages), 0, '/');
+    setcookie('form_bio', $bio, 0, '/');
+    setcookie('form_contract', $contract, 0, '/');
+
+    header('Location: form.php');
+    exit;
 } else {
     $stmt = $pdo->prepare("
         INSERT INTO users (fullname, phone, email, birthdate, gender, bio, contract)
@@ -103,6 +95,16 @@ if ($errors) {
         $langStmt->execute([$userId, $lang]);
     }
 
+    $expires = time() + (365 * 24 * 60 * 60);
+    setcookie('form_fullname', $fullname, $expires, '/');
+    setcookie('form_phone', $phone, $expires, '/');
+    setcookie('form_email', $email, $expires, '/');
+    setcookie('form_birthdate', $birthdate, $expires, '/');
+    setcookie('form_gender', $gender, $expires, '/');
+    setcookie('form_languages', json_encode($languages), $expires, '/');
+    setcookie('form_bio', $bio, $expires, '/');
+    setcookie('form_contract', '1', $expires, '/');
+
     echo <<<HTML
     <html><head><meta charset="utf-8"/><title>Успех</title>
     <style>
@@ -115,7 +117,7 @@ if ($errors) {
     </style>
     </head><body><div class="box">
       <h2>&#10003; Данные сохранены!</h2>
-      <a href="/web-4-sem/task3/form.html">&#8592; Назад к форме</a>
+      <a href="/web-4-sem/task3/form.php">&#8592; Назад к форме</a>
     </div></body></html>
     HTML;
 }

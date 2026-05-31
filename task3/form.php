@@ -1,3 +1,30 @@
+<?php
+$errors = [];
+if (isset($_COOKIE['form_errors'])) {
+    $errors = json_decode($_COOKIE['form_errors'], true) ?: [];
+    setcookie('form_errors', '', time() - 3600, '/');
+}
+
+$fullname = $_COOKIE['form_fullname'] ?? '';
+$phone = $_COOKIE['form_phone'] ?? '';
+$email = $_COOKIE['form_email'] ?? '';
+$birthdate = $_COOKIE['form_birthdate'] ?? '';
+$gender = $_COOKIE['form_gender'] ?? '';
+$languages = isset($_COOKIE['form_languages']) ? json_decode($_COOKIE['form_languages'], true) : [];
+$bio = $_COOKIE['form_bio'] ?? '';
+$contract = $_COOKIE['form_contract'] ?? '';
+
+if ($errors) {
+    setcookie('form_fullname', '', time() - 3600, '/');
+    setcookie('form_phone', '', time() - 3600, '/');
+    setcookie('form_email', '', time() - 3600, '/');
+    setcookie('form_birthdate', '', time() - 3600, '/');
+    setcookie('form_gender', '', time() - 3600, '/');
+    setcookie('form_languages', '', time() - 3600, '/');
+    setcookie('form_bio', '', time() - 3600, '/');
+    setcookie('form_contract', '', time() - 3600, '/');
+}
+?>
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -334,6 +361,54 @@
       letter-spacing: 0.28em;
     }
 
+    .error-box {
+      background: #fff5f5;
+      border: 1px solid #e8b4b8;
+      padding: 20px 24px;
+      margin-bottom: 32px;
+      border-radius: 2px;
+    }
+
+    .error-box h3 {
+      font-size: 14px;
+      font-weight: 500;
+      color: #c0392b;
+      margin-bottom: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .error-box ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .error-box li {
+      font-size: 13px;
+      color: #c0392b;
+      line-height: 1.8;
+      padding-left: 18px;
+      position: relative;
+    }
+
+    .error-box li::before {
+      content: '•';
+      position: absolute;
+      left: 6px;
+    }
+
+    .field-group.has-error .input-wrap {
+      border-bottom-color: #c0392b;
+    }
+
+    .field-group.has-error .input-wrap::after {
+      background: #c0392b;
+      width: 100%;
+    }
+
+    .field-group.has-error label.field-label {
+      color: #c0392b;
+    }
+
     @media (max-width: 620px) {
       .page-wrapper { padding: 36px 24px 32px; }
 
@@ -356,6 +431,17 @@
     <div class="header-divider"><span></span></div>
   </header>
 
+  <?php if ($errors): ?>
+  <div class="error-box">
+    <h3>Пожалуйста, исправьте ошибки:</h3>
+    <ul>
+      <?php foreach ($errors as $error): ?>
+        <li><?= htmlspecialchars($error) ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+  <?php endif; ?>
+
   <form action="/web-4-sem/task3/save.php" method="POST">
 
     <div class="field-group">
@@ -363,7 +449,7 @@
       <label class="field-label" for="fullname">ФИО</label>
       <div class="field-content">
         <div class="input-wrap">
-          <input type="text" id="fullname" name="fullname" placeholder="Иванов Иван Иванович" required/>
+          <input type="text" id="fullname" name="fullname" placeholder="Иванов Иван Иванович" value="<?= htmlspecialchars($fullname) ?>" required/>
         </div>
       </div>
     </div>
@@ -373,7 +459,7 @@
       <label class="field-label" for="phone">Телефон</label>
       <div class="field-content">
         <div class="input-wrap">
-          <input type="tel" id="phone" name="phone" placeholder="+7 (___) ___-__-__"/>
+          <input type="tel" id="phone" name="phone" placeholder="+7 (___) ___-__-__" value="<?= htmlspecialchars($phone) ?>"/>
         </div>
       </div>
     </div>
@@ -383,7 +469,7 @@
       <label class="field-label" for="email">E-mail</label>
       <div class="field-content">
         <div class="input-wrap">
-          <input type="email" id="email" name="email" placeholder="example@mail.com"/>
+          <input type="email" id="email" name="email" placeholder="example@mail.com" value="<?= htmlspecialchars($email) ?>"/>
         </div>
       </div>
     </div>
@@ -393,7 +479,7 @@
       <label class="field-label" for="birthdate">Дата рождения</label>
       <div class="field-content">
         <div class="input-wrap">
-          <input type="date" id="birthdate" name="birthdate"/>
+          <input type="date" id="birthdate" name="birthdate" value="<?= htmlspecialchars($birthdate) ?>"/>
         </div>
       </div>
     </div>
@@ -404,12 +490,12 @@
       <div class="field-content">
         <div class="radio-group">
           <label class="radio-item">
-            <input type="radio" name="gender" value="male"/>
+            <input type="radio" name="gender" value="male" <?= $gender === 'male' ? 'checked' : '' ?>/>
             <span class="radio-circle"></span>
             <span>Мужской</span>
           </label>
           <label class="radio-item">
-            <input type="radio" name="gender" value="female"/>
+            <input type="radio" name="gender" value="female" <?= $gender === 'female' ? 'checked' : '' ?>/>
             <span class="radio-circle"></span>
             <span>Женский</span>
           </label>
@@ -421,19 +507,19 @@
       <span class="field-num">06</span>
       <label class="field-label" for="languages">Язык<br>программирования</label>
       <div class="field-content">
-        <select id="languages" name="languages" multiple>
-          <option>Pascal</option>
-          <option>C</option>
-          <option>C++</option>
-          <option>JavaScript</option>
-          <option>PHP</option>
-          <option>Python</option>
-          <option>Java</option>
-          <option>Haskell</option>
-          <option>Clojure</option>
-          <option>Prolog</option>
-          <option>Scala</option>
-          <option>Go</option>
+        <select id="languages" name="languages[]" multiple>
+          <option <?= in_array('Pascal', $languages) ? 'selected' : '' ?>>Pascal</option>
+          <option <?= in_array('C', $languages) ? 'selected' : '' ?>>C</option>
+          <option <?= in_array('C++', $languages) ? 'selected' : '' ?>>C++</option>
+          <option <?= in_array('JavaScript', $languages) ? 'selected' : '' ?>>JavaScript</option>
+          <option <?= in_array('PHP', $languages) ? 'selected' : '' ?>>PHP</option>
+          <option <?= in_array('Python', $languages) ? 'selected' : '' ?>>Python</option>
+          <option <?= in_array('Java', $languages) ? 'selected' : '' ?>>Java</option>
+          <option <?= in_array('Haskell', $languages) ? 'selected' : '' ?>>Haskell</option>
+          <option <?= in_array('Clojure', $languages) ? 'selected' : '' ?>>Clojure</option>
+          <option <?= in_array('Prolog', $languages) ? 'selected' : '' ?>>Prolog</option>
+          <option <?= in_array('Scala', $languages) ? 'selected' : '' ?>>Scala</option>
+          <option <?= in_array('Go', $languages) ? 'selected' : '' ?>>Go</option>
         </select>
         <p class="select-hint">Удерживайте Ctrl / Cmd для выбора нескольких</p>
       </div>
@@ -444,7 +530,7 @@
       <label class="field-label" for="bio">Биография</label>
       <div class="field-content">
         <div class="input-wrap">
-          <textarea id="bio" name="bio" placeholder="Расскажите о себе…"></textarea>
+          <textarea id="bio" name="bio" placeholder="Расскажите о себе…"><?= htmlspecialchars($bio) ?></textarea>
         </div>
       </div>
     </div>
@@ -454,7 +540,7 @@
       <label class="field-label">Договор</label>
       <div class="field-content">
         <label class="checkbox-item">
-          <input type="checkbox" name="contract" required/>
+          <input type="checkbox" name="contract" <?= $contract ? 'checked' : '' ?> required/>
           <span class="checkbox-box"></span>
           <span>С контрактом ознакомлен(а) и согласен(на) с его условиями</span>
         </label>
